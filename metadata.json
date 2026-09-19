@@ -1,0 +1,6 @@
+{
+  "name": "GENESIS Process Flow & Nomenclature Challenge",
+  "description": "Interactive workplace compliance and process flow training quiz tailored for SOCOE staff on nomenclature, SANSOLS, JobSarawak, EXPRT, and HAVEN systems.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
