@@ -5,6 +5,7 @@ import { QuizCard } from './components/QuizCard';
 import { ResultScreen } from './components/ResultScreen';
 import { ModeSelectorModal } from './components/ModeSelectorModal';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
+import { PasswordGate } from './components/PasswordGate';
 import { SocoeLogo } from './components/SocoeLogo';
 import {
   MASTER_QUESTIONS,
@@ -21,6 +22,11 @@ import {
 import { Shield, Sparkles, BookOpen } from 'lucide-react';
 
 export default function App() {
+  // Session password protection state
+  const [isUnlocked, setIsUnlocked] = useState<boolean>(() => {
+    return sessionStorage.getItem('socoe_genesis_auth') === 'unlocked';
+  });
+
   const [currentMode, setCurrentMode] = useState<QuizMode>('FULL');
   const [currentSection, setCurrentSection] = useState<QuizSection>('ALL');
 
@@ -129,6 +135,12 @@ export default function App() {
     startQuiz('FULL', 'ALL', missedPool);
   };
 
+  // Lock Session Handler
+  const handleLockSession = () => {
+    sessionStorage.removeItem('socoe_genesis_auth');
+    setIsUnlocked(false);
+  };
+
   // Keyboard navigation handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -188,6 +200,11 @@ export default function App() {
       ? 100.0
       : Number(((score / (currentIndex + (isAnswered ? 1 : 0))) * 100).toFixed(1));
 
+  // If password gate is locked, render confidential password screen
+  if (!isUnlocked) {
+    return <PasswordGate onUnlock={() => setIsUnlocked(true)} />;
+  }
+
   return (
     <div className="min-h-screen bg-[#050811] text-slate-100 flex flex-col selection:bg-cyan-500/30 selection:text-cyan-200 relative overflow-x-hidden font-sans">
       {/* SOCOE Dynamic Aurora & Mesh Background (matching company website) */}
@@ -214,6 +231,7 @@ export default function App() {
         onOpenModeSelector={() => setIsModeModalOpen(true)}
         onResetQuiz={() => startQuiz(currentMode, currentSection)}
         onOpenKeyboardShortcuts={() => setIsShortcutsModalOpen(true)}
+        onLockSession={handleLockSession}
         totalTickets={questions.length}
       />
 

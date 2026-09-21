@@ -1,6 +1,6 @@
 import React from 'react';
 import { SocoeLogo } from './SocoeLogo';
-import { BookOpen, RefreshCw, Layers, Keyboard } from 'lucide-react';
+import { BookOpen, RefreshCw, Layers, Keyboard, Lock } from 'lucide-react';
 import { QuizMode, QuizSection } from '../types';
 import { SECTION_METADATA } from '../data/questions';
 
@@ -10,6 +10,7 @@ interface NavbarProps {
   onOpenModeSelector: () => void;
   onResetQuiz: () => void;
   onOpenKeyboardShortcuts: () => void;
+  onLockSession: () => void;
   totalTickets: number;
 }
 
@@ -19,6 +20,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenModeSelector,
   onResetQuiz,
   onOpenKeyboardShortcuts,
+  onLockSession,
   totalTickets,
 }) => {
   const getModeLabel = () => {
@@ -82,6 +84,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Shuffle & Reset</span>
+          </button>
+
+          {/* Lock Session */}
+          <button
+            id="nav-lock-btn"
+            onClick={onLockSession}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900/80 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-700/50 text-slate-400 hover:text-rose-300 text-xs font-medium transition-all"
+            title="Lock confidential training challenge"
+            aria-label="Lock Session"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Lock</span>
           </button>
         </div>
       </div>
