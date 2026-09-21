@@ -77,10 +77,10 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
                 {currentMode === 'FULL' && <Check className="w-4 h-4 text-cyan-400" />}
               </div>
               <p className="text-xs text-slate-400 mt-1">
-                All 68 comprehensive scenarios across all GENESIS workforce modules.
+                All 90 comprehensive scenarios across all GENESIS workforce modules.
               </p>
               <div className="mt-2.5 inline-block text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-cyan-900/40 text-cyan-300 border border-cyan-700/40">
-                68 CX Tickets
+                90 CX Tickets
               </div>
             </button>
 
