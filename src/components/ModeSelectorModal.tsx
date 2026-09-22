@@ -9,6 +9,8 @@ interface ModeSelectorModalProps {
   currentMode: QuizMode;
   currentSection: QuizSection;
   onSelectMode: (mode: QuizMode, section?: QuizSection) => void;
+  candidateEmail?: string;
+  isInitialSelection?: boolean;
 }
 
 export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
@@ -17,6 +19,8 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
   currentMode,
   currentSection,
   onSelectMode,
+  candidateEmail,
+  isInitialSelection = false,
 }) => {
   if (!isOpen) return null;
 
@@ -30,27 +34,44 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-xl rounded-2xl bg-[#0b1328] border border-cyan-500/30 p-6 sm:p-7 shadow-2xl shadow-cyan-950/50 space-y-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-xl rounded-2xl bg-[#0b1328] border border-cyan-500/40 p-6 sm:p-7 shadow-2xl shadow-cyan-950/60 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 flex items-center justify-center">
-              <Layers className="w-4 h-4" />
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 flex items-center justify-center shrink-0">
+              <Layers className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white font-heading">Select Challenge Mode</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-white font-heading">
+                  {isInitialSelection ? 'Choose Your Assessment' : 'Select Challenge Mode'}
+                </h2>
+                {isInitialSelection && (
+                  <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-cyan-950 border border-cyan-500/40 text-cyan-300">
+                    Step 1 of 1
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-slate-400">
-                Tailor your training session length and curriculum focus.
+                {candidateEmail ? (
+                  <span>
+                    Welcome <strong className="text-cyan-300">{candidateEmail}</strong>. Select your examination mode to begin:
+                  </span>
+                ) : (
+                  'Tailor your training session length and curriculum focus.'
+                )}
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {!isInitialSelection && (
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Global Modes */}

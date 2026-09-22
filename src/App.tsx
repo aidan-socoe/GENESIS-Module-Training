@@ -51,6 +51,7 @@ export default function App() {
 
   // Modals
   const [isModeModalOpen, setIsModeModalOpen] = useState<boolean>(false);
+  const [isInitialModeSelection, setIsInitialModeSelection] = useState<boolean>(false);
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState<boolean>(false);
   const [isRosterModalOpen, setIsRosterModalOpen] = useState<boolean>(false);
   const [isGoogleSheetModalOpen, setIsGoogleSheetModalOpen] = useState<boolean>(false);
@@ -115,7 +116,7 @@ export default function App() {
 
   // Initialize Quiz helper
   const startQuiz = useCallback(
-    (mode: QuizMode = 'FULL', section: QuizSection = 'ALL', customPool?: QuizQuestion[]) => {
+    (mode: QuizMode = 'FULL', section: QuizSection = 'ALL', customPool?: QuizQuestion[], skipStartWebhook: boolean = false) => {
       let limit: number | undefined;
       if (mode === 'SPRINT_30') {
         limit = 30;
@@ -138,36 +139,38 @@ export default function App() {
       setCurrentMode(mode);
       setCurrentSection(section);
 
-      // Log quiz start event if candidate is known
-      const activeCandidate = sessionStorage.getItem('socoe_genesis_email') || participantEmail;
-      if (activeCandidate) {
-        sendToGoogleSheetWebhook({
-          eventType: 'START',
-          candidateEmail: activeCandidate,
-          timestamp: new Date().toISOString(),
-          mode,
-          section,
-          status: 'Started',
-          totalQuestions: prepared.length,
-        }).catch(() => {});
+      // Log quiz start event to Google Sheet webhook when candidate explicitly starts/selects a quiz
+      if (!skipStartWebhook) {
+        const activeCandidate = sessionStorage.getItem('socoe_genesis_email') || participantEmail;
+        if (activeCandidate) {
+          sendToGoogleSheetWebhook({
+            eventType: 'START',
+            candidateEmail: activeCandidate,
+            timestamp: new Date().toISOString(),
+            mode,
+            section,
+            status: 'Started',
+            totalQuestions: prepared.length,
+          }).catch(() => {});
+        }
       }
     },
     [participantEmail]
   );
 
-  // Initial load
+  // Initial load: prepare questions silently without prematurely firing START webhook
   useEffect(() => {
-    startQuiz('FULL', 'ALL');
+    startQuiz('FULL', 'ALL', undefined, true);
   }, [startQuiz]);
 
   // Timer loop
   useEffect(() => {
-    if (isComplete) return;
+    if (isComplete || isInitialModeSelection) return;
     const timer = setInterval(() => {
       setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
     }, 1000);
     return () => clearInterval(timer);
-  }, [isComplete, startTime]);
+  }, [isComplete, isInitialModeSelection, startTime]);
 
   // Handle Option Selection
   const handleSelectOption = (option: QuizOption, index: number) => {
@@ -235,6 +238,9 @@ export default function App() {
   const handleUnlock = (email: string) => {
     setParticipantEmail(email);
     setIsUnlocked(true);
+    // Automatically present the mode selection dialog upon login
+    setIsInitialModeSelection(true);
+    setIsModeModalOpen(true);
   };
 
   // Keyboard navigation handler
@@ -421,10 +427,18 @@ export default function App() {
       {/* Modals */}
       <ModeSelectorModal
         isOpen={isModeModalOpen}
-        onClose={() => setIsModeModalOpen(false)}
+        onClose={() => {
+          setIsModeModalOpen(false);
+          setIsInitialModeSelection(false);
+        }}
         currentMode={currentMode}
         currentSection={currentSection}
-        onSelectMode={(mode, section) => startQuiz(mode, section || 'ALL')}
+        candidateEmail={participantEmail}
+        isInitialSelection={isInitialModeSelection}
+        onSelectMode={(mode, section) => {
+          setIsInitialModeSelection(false);
+          startQuiz(mode, section || 'ALL');
+        }}
       />
 
       <KeyboardShortcutsModal
