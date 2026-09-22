@@ -6,12 +6,14 @@ interface ParticipantHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentEmail: string;
+  onOpenGoogleSheetSync?: () => void;
 }
 
 export const ParticipantHistoryModal: React.FC<ParticipantHistoryModalProps> = ({
   isOpen,
   onClose,
   currentEmail,
+  onOpenGoogleSheetSync,
 }) => {
   const [records, setRecords] = useState<AssessmentParticipant[]>(() => {
     try {
@@ -100,6 +102,15 @@ export const ParticipantHistoryModal: React.FC<ParticipantHistoryModalProps> = (
               Stored Records ({records.length})
             </span>
             <div className="flex items-center gap-2">
+              {onOpenGoogleSheetSync && (
+                <button
+                  onClick={onOpenGoogleSheetSync}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 text-xs transition-colors cursor-pointer"
+                  title="Configure Google Sheet webhook and email results"
+                >
+                  <span>Google Sheet Sync</span>
+                </button>
+              )}
               {records.length > 0 && (
                 <>
                   <button

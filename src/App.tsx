@@ -7,6 +7,8 @@ import { ModeSelectorModal } from './components/ModeSelectorModal';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { PasswordGate } from './components/PasswordGate';
 import { ParticipantHistoryModal } from './components/ParticipantHistoryModal';
+import { GoogleSheetConfigModal } from './components/GoogleSheetConfigModal';
+import { sendToGoogleSheetWebhook } from './services/webhook';
 import { SocoeLogo } from './components/SocoeLogo';
 import {
   MASTER_QUESTIONS,
@@ -51,6 +53,65 @@ export default function App() {
   const [isModeModalOpen, setIsModeModalOpen] = useState<boolean>(false);
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState<boolean>(false);
   const [isRosterModalOpen, setIsRosterModalOpen] = useState<boolean>(false);
+  const [isGoogleSheetModalOpen, setIsGoogleSheetModalOpen] = useState<boolean>(false);
+
+  // Helper to trigger automated webhook sync
+  const dispatchQuizResult = useCallback(
+    (
+      finalScore: number,
+      finalMistakes: MistakeRecord[],
+      finalQuestions: QuizQuestion[],
+      timeSeconds: number,
+      mode: QuizMode,
+      section: QuizSection
+    ) => {
+      if (!participantEmail) return;
+
+      const totalCount = finalQuestions.length;
+      const pct = totalCount > 0 ? Number(((finalScore / totalCount) * 100).toFixed(1)) : 0;
+      const isPassed = pct >= 80.0;
+
+      // Calculate section breakdown
+      const breakdown: Record<string, { correct: number; total: number; percentage: number }> = {};
+      finalQuestions.forEach((q) => {
+        if (!breakdown[q.section]) {
+          breakdown[q.section] = { correct: 0, total: 0, percentage: 0 };
+        }
+        breakdown[q.section].total += 1;
+      });
+
+      const mistakeMap: Record<string, number> = {};
+      finalMistakes.forEach((m) => {
+        mistakeMap[m.section] = (mistakeMap[m.section] || 0) + 1;
+      });
+
+      Object.keys(breakdown).forEach((sec) => {
+        const item = breakdown[sec];
+        const mistakesInSec = mistakeMap[sec] || 0;
+        item.correct = Math.max(0, item.total - mistakesInSec);
+        item.percentage = item.total > 0 ? Number(((item.correct / item.total) * 100).toFixed(1)) : 0;
+      });
+
+      sendToGoogleSheetWebhook({
+        eventType: 'FINISH',
+        candidateEmail: participantEmail,
+        timestamp: new Date().toISOString(),
+        mode,
+        section,
+        status: 'Finished',
+        score: finalScore,
+        totalQuestions: totalCount,
+        percentage: pct,
+        passed: isPassed,
+        timeSpentSeconds: timeSeconds,
+        timeSpentFormatted: `${Math.floor(timeSeconds / 60)}m ${timeSeconds % 60}s`,
+        sectionBreakdown: breakdown,
+        mistakesCount: finalMistakes.length,
+        mistakeTopics: finalMistakes.slice(0, 5).map((m) => m.questionText.slice(0, 80)),
+      }).catch((e) => console.error('Error firing webhook finish event:', e));
+    },
+    [participantEmail]
+  );
 
   // Initialize Quiz helper
   const startQuiz = useCallback(
@@ -76,8 +137,22 @@ export default function App() {
       setElapsedSeconds(0);
       setCurrentMode(mode);
       setCurrentSection(section);
+
+      // Log quiz start event if candidate is known
+      const activeCandidate = sessionStorage.getItem('socoe_genesis_email') || participantEmail;
+      if (activeCandidate) {
+        sendToGoogleSheetWebhook({
+          eventType: 'START',
+          candidateEmail: activeCandidate,
+          timestamp: new Date().toISOString(),
+          mode,
+          section,
+          status: 'Started',
+          totalQuestions: prepared.length,
+        }).catch(() => {});
+      }
     },
-    []
+    [participantEmail]
   );
 
   // Initial load
@@ -129,8 +204,19 @@ export default function App() {
       setIsAnswered(false);
     } else {
       setIsComplete(true);
+      // Dispatch automated webhook results and email
+      dispatchQuizResult(score, mistakes, questions, elapsedSeconds, currentMode, currentSection);
     }
-  }, [currentIndex, questions.length]);
+  }, [
+    currentIndex,
+    questions,
+    score,
+    mistakes,
+    elapsedSeconds,
+    currentMode,
+    currentSection,
+    dispatchQuizResult,
+  ]);
 
   // Retest Missed Questions Only
   const handleRetestMissed = () => {
@@ -243,6 +329,7 @@ export default function App() {
         onOpenKeyboardShortcuts={() => setIsShortcutsModalOpen(true)}
         onLockSession={handleLockSession}
         onOpenRoster={() => setIsRosterModalOpen(true)}
+        onOpenGoogleSheetSync={() => setIsGoogleSheetModalOpen(true)}
         activeEmail={participantEmail}
         totalTickets={questions.length}
       />
@@ -304,10 +391,12 @@ export default function App() {
             timeSpentSeconds={elapsedSeconds}
             mode={currentMode}
             section={currentSection}
+            questions={questions}
             participantEmail={participantEmail}
             onRestart={() => startQuiz(currentMode, currentSection)}
             onRetestMissed={handleRetestMissed}
             onOpenModeSelector={() => setIsModeModalOpen(true)}
+            onOpenGoogleSheetSync={() => setIsGoogleSheetModalOpen(true)}
           />
         ) : null}
       </main>
@@ -347,6 +436,13 @@ export default function App() {
         isOpen={isRosterModalOpen}
         onClose={() => setIsRosterModalOpen(false)}
         currentEmail={participantEmail}
+        onOpenGoogleSheetSync={() => setIsGoogleSheetModalOpen(true)}
+      />
+
+      <GoogleSheetConfigModal
+        isOpen={isGoogleSheetModalOpen}
+        onClose={() => setIsGoogleSheetModalOpen(false)}
+        activeEmail={participantEmail}
       />
     </div>
   );

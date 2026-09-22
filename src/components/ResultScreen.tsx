@@ -12,9 +12,14 @@ import {
   Filter,
   Check,
   HelpCircle,
-  FileCheck
+  FileCheck,
+  Table,
+  MailCheck,
+  Send
 } from 'lucide-react';
-import { MistakeRecord, QuizMode, QuizSection } from '../types';
+import { MistakeRecord, QuizMode, QuizQuestion, QuizSection } from '../types';
+import { SECTION_METADATA } from '../data/questions';
+import { getStoredWebhookUrl } from '../services/webhook';
 
 interface ResultScreenProps {
   score: number;
@@ -23,10 +28,12 @@ interface ResultScreenProps {
   timeSpentSeconds: number;
   mode: QuizMode;
   section: QuizSection;
+  questions?: QuizQuestion[];
   participantEmail?: string;
   onRestart: () => void;
   onRetestMissed: () => void;
   onOpenModeSelector: () => void;
+  onOpenGoogleSheetSync?: () => void;
 }
 
 export const ResultScreen: React.FC<ResultScreenProps> = ({
@@ -36,14 +43,54 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
   timeSpentSeconds,
   mode,
   section,
+  questions = [],
   participantEmail,
   onRestart,
   onRetestMissed,
   onOpenModeSelector,
+  onOpenGoogleSheetSync,
 }) => {
   const percentage = Number(((score / total) * 100).toFixed(1));
   const passed = percentage >= 80.0;
   const [selectedSectionFilter, setSelectedSectionFilter] = useState<string>('ALL');
+  const hasWebhook = !!getStoredWebhookUrl();
+
+  // Compute detailed per-section statistics
+  const sectionStats = React.useMemo(() => {
+    const stats: Record<string, { total: number; mistakes: number; correct: number; percentage: number; label: string }> = {};
+
+    // Determine all sections present in the current test
+    questions.forEach((q) => {
+      if (!stats[q.section]) {
+        stats[q.section] = {
+          total: 0,
+          mistakes: 0,
+          correct: 0,
+          percentage: 0,
+          label: SECTION_METADATA[q.section]?.label || q.section,
+        };
+      }
+      stats[q.section].total += 1;
+    });
+
+    // Count mistakes by section
+    mistakes.forEach((m) => {
+      if (stats[m.section]) {
+        stats[m.section].mistakes += 1;
+      }
+    });
+
+    // Calculate correct and percentages
+    Object.keys(stats).forEach((k) => {
+      const s = stats[k];
+      s.correct = Math.max(0, s.total - s.mistakes);
+      s.percentage = s.total > 0 ? Number(((s.correct / s.total) * 100).toFixed(1)) : 0;
+    });
+
+    return stats;
+  }, [questions, mistakes]);
+
+  const sectionKeys = Object.keys(sectionStats);
 
   useEffect(() => {
     if (passed) {
@@ -167,6 +214,101 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
           </span>
           <span className="text-[11px] text-slate-500 mt-1">Active evaluation</span>
         </div>
+      </div>
+
+      {/* Section Performance Breakdown (Particularly for Full Exam & Sprint) */}
+      {sectionKeys.length > 1 && (
+        <div className="bg-[#091122]/90 border border-slate-800/80 rounded-2xl p-6 sm:p-7 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+            <div>
+              <h2 className="text-base font-bold text-white flex items-center gap-2 font-heading">
+                <Layers className="w-4 h-4 text-cyan-400" />
+                <span>Section & Module Breakdown</span>
+              </h2>
+              <p className="text-xs text-slate-400">
+                Detailed domain-level scores recorded into your assessment report.
+              </p>
+            </div>
+            <span className="text-[11px] font-mono text-cyan-400">
+              {sectionKeys.length} Modules Assessed
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {sectionKeys.map((secKey) => {
+              const item = sectionStats[secKey];
+              const secPassed = item.percentage >= 80.0;
+              return (
+                <div
+                  key={secKey}
+                  className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition-colors flex flex-col justify-between"
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <span className="text-xs font-semibold text-slate-200 line-clamp-1">
+                      {item.label}
+                    </span>
+                    <span
+                      className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                        secPassed
+                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/50'
+                          : 'bg-rose-950 text-rose-300 border border-rose-800/50'
+                      }`}
+                    >
+                      {item.percentage}%
+                    </span>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mb-2">
+                    <div
+                      className={`h-full rounded-full ${
+                        secPassed ? 'bg-emerald-400' : 'bg-rose-400'
+                      }`}
+                      style={{ width: `${Math.min(100, item.percentage)}%` }}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span>
+                      {item.correct} of {item.total} correct
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      {item.mistakes} {item.mistakes === 1 ? 'error' : 'errors'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Google Sheet Webhook Sync Notification Banner */}
+      <div className="p-4 rounded-2xl bg-[#09152b] border border-cyan-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 flex items-center justify-center shrink-0">
+            <MailCheck className="w-5 h-5 text-cyan-400" />
+          </div>
+          <div>
+            <span className="text-xs font-bold text-white block">
+              Automated Results Logging & Participant Email Dispatch
+            </span>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {hasWebhook
+                ? 'Your test metrics and section statistics are synced to Google Sheets and dispatched via email.'
+                : 'Connect your Google Sheet webhook URL to automatically record all candidate scores and email results.'}
+            </p>
+          </div>
+        </div>
+        {onOpenGoogleSheetSync && (
+          <button
+            onClick={onOpenGoogleSheetSync}
+            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-semibold border border-cyan-500/30 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+          >
+            <Table className="w-3.5 h-3.5 text-cyan-400" />
+            <span>{hasWebhook ? 'Manage Sheet Sync' : 'Setup Google Sheet'}</span>
+          </button>
+        )}
       </div>
 
       {/* Action Controls */}

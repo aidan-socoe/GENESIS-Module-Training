@@ -1,6 +1,6 @@
 import React from 'react';
 import { SocoeLogo } from './SocoeLogo';
-import { BookOpen, RefreshCw, Layers, Keyboard, Lock, Users, Mail } from 'lucide-react';
+import { BookOpen, RefreshCw, Layers, Keyboard, Lock, Users, Mail, Table } from 'lucide-react';
 import { QuizMode, QuizSection } from '../types';
 import { SECTION_METADATA } from '../data/questions';
 
@@ -12,6 +12,7 @@ interface NavbarProps {
   onOpenKeyboardShortcuts: () => void;
   onLockSession: () => void;
   onOpenRoster?: () => void;
+  onOpenGoogleSheetSync?: () => void;
   activeEmail?: string;
   totalTickets: number;
 }
@@ -24,6 +25,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenKeyboardShortcuts,
   onLockSession,
   onOpenRoster,
+  onOpenGoogleSheetSync,
   activeEmail,
   totalTickets,
 }) => {
@@ -72,6 +74,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               aria-label="View Roster"
             >
               <Users className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Google Sheet Sync Settings Button */}
+          {onOpenGoogleSheetSync && (
+            <button
+              onClick={onOpenGoogleSheetSync}
+              className="p-2 rounded-lg bg-slate-900/80 border border-slate-800 hover:border-emerald-500/50 text-slate-400 hover:text-emerald-300 transition-colors cursor-pointer"
+              title="Configure Google Sheet webhook and email dispatch"
+              aria-label="Google Sheet Sync"
+            >
+              <Table className="w-4 h-4 text-emerald-400" />
             </button>
           )}
 
