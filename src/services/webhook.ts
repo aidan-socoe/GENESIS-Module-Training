@@ -1,5 +1,15 @@
 import { QuizMode, QuizSection, MistakeRecord } from '../types';
 
+export interface WebhookMistakeItem {
+  questionId: string;
+  section: string;
+  sectionTitle: string;
+  questionText: string;
+  selectedAnswer: string;
+  correctAnswer: string;
+  reason: string;
+}
+
 export interface WebhookPayload {
   eventType: 'START' | 'FINISH' | 'ABANDON';
   candidateEmail: string;
@@ -16,8 +26,10 @@ export interface WebhookPayload {
   // Section performance breakdown for full exam or multi-section
   sectionBreakdown?: Record<string, { correct: number; total: number; percentage: number }>;
   mistakesCount?: number;
-  // Optional summary of mistakes for audit
-  mistakeTopics?: string[];
+  // Summary tags of weakest domains
+  weakestModules?: string[];
+  // Option 2: Full item analysis of every incorrect answer
+  detailedMistakes?: WebhookMistakeItem[];
   clientIpOrUserAgent?: string;
 }
 
@@ -48,7 +60,6 @@ export async function sendToGoogleSheetWebhook(payload: WebhookPayload, customUr
   const url = customUrl || getStoredWebhookUrl();
   if (!url) {
     console.warn('[Webhook] No Google Sheet Webhook URL configured. Event saved locally.');
-    // Save to local submission history so it is never lost
     saveLocalWebhookEvent(payload);
     return { success: false, message: 'No Google Sheet Webhook URL configured.' };
   }
@@ -56,9 +67,6 @@ export async function sendToGoogleSheetWebhook(payload: WebhookPayload, customUr
   try {
     saveLocalWebhookEvent(payload);
 
-    // Google Apps Script Web Apps handle POST requests. To avoid browser CORS preflight blocking,
-    // sending as text/plain or urlencoded is standard for Apps Script doPost(e).
-    // e.postData.contents will contain the valid JSON string.
     await fetch(url, {
       method: 'POST',
       mode: 'no-cors', // Essential for Google Apps Script 302 redirect responses!
@@ -84,7 +92,7 @@ export function saveLocalWebhookEvent(payload: WebhookPayload) {
     const raw = localStorage.getItem('socoe_webhook_submissions');
     const list = raw ? JSON.parse(raw) : [];
     list.push(payload);
-    localStorage.setItem('socoe_webhook_submissions', JSON.stringify(list.slice(-100))); // Keep last 100
+    localStorage.setItem('socoe_webhook_submissions', JSON.stringify(list.slice(-100)));
   } catch (e) {
     console.error('Failed to write to local webhook log', e);
   }
@@ -101,52 +109,64 @@ export function getLocalWebhookSubmissions(): WebhookPayload[] {
 }
 
 /**
- * Prepares the Google Apps Script code snippet for the user to copy-paste into Extensions > Apps Script in Google Sheets.
- * This script will automatically append the row to the active sheet and compute the formatted columns,
- * plus automatically send an email to the test-taker via MailApp.sendEmail!
+ * Option 2 Google Apps Script implementation:
+ * - Tab 1: "Assessment Summary" (1 row per test session)
+ * - Tab 2: "Mistakes Item Analysis" (1 row per question answered incorrectly)
+ * Plus automated email dispatch with diagnostic details to the candidate.
  */
 export const GOOGLE_APPS_SCRIPT_TEMPLATE = `
 /**
- * SOCOE GENESIS Training - Google Sheet & Email Webhook Script
+ * SOCOE GENESIS Training - Google Sheet & Email Webhook Script (Option 2: Item Analysis)
+ * 
+ * Multi-Tab Architecture:
+ * - Tab 1: "Assessment Summary" (Overview of each test session, score %, weakest domains)
+ * - Tab 2: "Mistakes Item Analysis" (Detailed breakdown of each question answered incorrectly)
  * 
  * Setup Instructions:
- * 1. In your Google Sheet, click Extensions > Apps Script
+ * 1. Open your Google Sheet, click Extensions > Apps Script
  * 2. Delete everything and paste this entire code
  * 3. Click "Deploy" > "New deployment"
  * 4. Select type: "Web app"
  * 5. Configuration:
- *    - Description: SOCOE GENESIS Challenge Webhook
+ *    - Description: SOCOE GENESIS Challenge Webhook (Option 2)
  *    - Execute as: "Me"
- *    - Who has access: "Anyone" (allows applet to send POST)
- * 6. Click "Deploy", Authorize permissions, and copy the "Web app URL".
+ *    - Who has access: "Anyone"
+ * 6. Click "Deploy", Authorize permissions, and copy the "Web app URL"
  * 7. Paste that Web app URL into the SOCOE Challenge Webhook Configuration modal!
  */
 
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  lock.tryLock(10000);
+  lock.tryLock(15000);
 
   try {
     var rawData = e.postData.contents;
     var data = JSON.parse(rawData);
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName("Assessment Results") || ss.getActiveSheet();
 
-    // Auto-create headers if sheet is brand new
-    if (sheet.getLastRow() === 0) {
-      sheet.appendRow([
+    // ==========================================
+    // 1. TAB 1: ASSESSMENT SUMMARY
+    // ==========================================
+    var summarySheet = ss.getSheetByName("Assessment Summary");
+    if (!summarySheet) {
+      summarySheet = ss.insertSheet("Assessment Summary", 0);
+    }
+
+    if (summarySheet.getLastRow() === 0) {
+      summarySheet.appendRow([
         "Timestamp",
         "Candidate Email",
         "Status",
         "Mode",
         "Section",
         "Score",
-        "Total",
+        "Total Questions",
         "Percentage",
         "Passed?",
         "Time Spent",
-        "Mistakes",
+        "Total Mistakes",
+        "Weakest Domain(s)",
         "Nomenclature %",
         "JobSarawak %",
         "SANSOLS %",
@@ -155,8 +175,33 @@ function doPost(e) {
         "Accounts %",
         "Email Dispatched?"
       ]);
-      sheet.getRange(1, 1, 1, 18).setFontWeight("bold").setBackground("#0f172a").setFontColor("#38bdf8");
-      sheet.setFrozenRows(1);
+      summarySheet.getRange(1, 1, 1, 19).setFontWeight("bold").setBackground("#0f172a").setFontColor("#38bdf8");
+      summarySheet.setFrozenRows(1);
+    }
+
+    // ==========================================
+    // 2. TAB 2: MISTAKES ITEM ANALYSIS (Option 2)
+    // ==========================================
+    var itemAnalysisSheet = ss.getSheetByName("Mistakes Item Analysis");
+    if (!itemAnalysisSheet) {
+      itemAnalysisSheet = ss.insertSheet("Mistakes Item Analysis", 1);
+    }
+
+    if (itemAnalysisSheet.getLastRow() === 0) {
+      itemAnalysisSheet.appendRow([
+        "Timestamp",
+        "Candidate Email",
+        "Module Code",
+        "Module Name",
+        "Question ID",
+        "Question Scenario / Prompt",
+        "Candidate's Selected Answer",
+        "Correct SOP Protocol",
+        "Procedural SOP Reason",
+        "Assessment Mode"
+      ]);
+      itemAnalysisSheet.getRange(1, 1, 1, 10).setFontWeight("bold").setBackground("#1e1b4b").setFontColor("#c084fc");
+      itemAnalysisSheet.setFrozenRows(1);
     }
 
     var ts = data.timestamp || new Date().toISOString();
@@ -169,9 +214,10 @@ function doPost(e) {
     var pct = data.percentage != null ? data.percentage + "%" : "-";
     var passed = data.passed != null ? (data.passed ? "PASS" : "FAIL") : "-";
     var timeSpent = data.timeSpentFormatted || (data.timeSpentSeconds ? Math.floor(data.timeSpentSeconds/60) + "m " + (data.timeSpentSeconds%60) + "s" : "-");
-    var mistakes = data.mistakesCount != null ? data.mistakesCount : "-";
+    var mistakes = data.mistakesCount != null ? data.mistakesCount : 0;
+    var weakest = (data.weakestModules && data.weakestModules.length > 0) ? data.weakestModules.join(", ") : "None (<80%)";
 
-    // Section Breakdown values
+    // Module breakdown percentages
     var b = data.sectionBreakdown || {};
     var nom = b["NOMENCLATURE"] ? b["NOMENCLATURE"].percentage + "%" : "-";
     var js = b["JOBSARAWAK"] ? b["JOBSARAWAK"].percentage + "%" : "-";
@@ -182,38 +228,99 @@ function doPost(e) {
 
     var emailSent = "N/A";
 
-    // If test is finished, email results directly to the test-taker!
+    // ------------------------------------------
+    // Populate Tab 2: Mistakes Item Analysis
+    // ------------------------------------------
+    var itemsLogged = 0;
+    if (data.detailedMistakes && data.detailedMistakes.length > 0) {
+      var rowsToAppend = [];
+      for (var i = 0; i < data.detailedMistakes.length; i++) {
+        var m = data.detailedMistakes[i];
+        rowsToAppend.push([
+          ts,
+          email,
+          m.section || "-",
+          m.sectionTitle || "-",
+          m.questionId || "-",
+          m.questionText || "-",
+          m.selectedAnswer || "-",
+          m.correctAnswer || "-",
+          m.reason || "-",
+          mode
+        ]);
+      }
+      if (rowsToAppend.length > 0) {
+        var startRow = itemAnalysisSheet.getLastRow() + 1;
+        itemAnalysisSheet.getRange(startRow, 1, rowsToAppend.length, 10).setValues(rowsToAppend);
+        itemsLogged = rowsToAppend.length;
+      }
+    }
+
+    // ------------------------------------------
+    // Send Automated Email to Candidate
+    // ------------------------------------------
     if (data.eventType === "FINISH" && email && email.indexOf("@") !== -1) {
       try {
         var subject = "[SOCOE GENESIS Training] Assessment Results - " + passed + " (" + pct + ")";
         var htmlBody = 
-          "<div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px;'>" +
-          "<div style='background-color: #0f172a; padding: 16px; border-radius: 8px; text-align: center; margin-bottom: 20px;'>" +
+          "<div style='font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px;'>" +
+          "<div style='background-color: #0f172a; padding: 18px; border-radius: 8px; text-align: center; margin-bottom: 20px;'>" +
           "<h2 style='color: #38bdf8; margin: 0;'>SOCOE GENESIS Training</h2>" +
-          "<p style='color: #94a3b8; margin: 4px 0 0 0; font-size: 13px;'>Assessment Completion Certificate & Report</p>" +
+          "<p style='color: #94a3b8; margin: 4px 0 0 0; font-size: 13px;'>Assessment Completion Certificate & Diagnostic Report</p>" +
           "</div>" +
           "<p>Dear <strong>" + email + "</strong>,</p>" +
-          "<p>Thank you for completing the <strong>GENESIS Process Flow & Nomenclature Assessment</strong>.</p>" +
-          "<table style='width: 100%; border-collapse: collapse; margin: 20px 0;'>" +
+          "<p>Your submission for the <strong>GENESIS Process Flow & Nomenclature Assessment</strong> has been evaluated and logged into the central training registry.</p>" +
+          "<table style='width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 13px;'>" +
           "<tr style='background: #f8fafc;'><td style='padding: 10px; border: 1px solid #e2e8f0;'><strong>Assessment Status:</strong></td><td style='padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; color: " + (data.passed ? "#16a34a" : "#dc2626") + ";'>" + passed + "</td></tr>" +
-          "<tr><td style='padding: 10px; border: 1px solid #e2e8f0;'><strong>Score:</strong></td><td style='padding: 10px; border: 1px solid #e2e8f0;'>" + score + " / " + total + " (" + pct + ")</td></tr>" +
+          "<tr><td style='padding: 10px; border: 1px solid #e2e8f0;'><strong>Final Score:</strong></td><td style='padding: 10px; border: 1px solid #e2e8f0;'>" + score + " / " + total + " (" + pct + ")</td></tr>" +
           "<tr style='background: #f8fafc;'><td style='padding: 10px; border: 1px solid #e2e8f0;'><strong>Benchmark Passing Mark:</strong></td><td style='padding: 10px; border: 1px solid #e2e8f0;'>80.0%</td></tr>" +
           "<tr><td style='padding: 10px; border: 1px solid #e2e8f0;'><strong>Time Elapsed:</strong></td><td style='padding: 10px; border: 1px solid #e2e8f0;'>" + timeSpent + "</td></tr>" +
-          "<tr style='background: #f8fafc;'><td style='padding: 10px; border: 1px solid #e2e8f0;'><strong>Discrepancies / Mistakes:</strong></td><td style='padding: 10px; border: 1px solid #e2e8f0;'>" + mistakes + "</td></tr>" +
+          "<tr style='background: #f8fafc;'><td style='padding: 10px; border: 1px solid #e2e8f0;'><strong>Total Discrepancies:</strong></td><td style='padding: 10px; border: 1px solid #e2e8f0;'>" + mistakes + "</td></tr>" +
+          "<tr><td style='padding: 10px; border: 1px solid #e2e8f0;'><strong>Priority Focus Domain(s):</strong></td><td style='padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; color: #d97706;'>" + weakest + "</td></tr>" +
           "</table>";
 
+        // Module Breakdown table
         if (Object.keys(b).length > 0) {
-          htmlBody += "<h3 style='color: #0f172a; margin-top: 24px;'>Module Breakdown</h3><ul style='line-height: 1.6;'>";
-          if (b["NOMENCLATURE"]) htmlBody += "<li><strong>Nomenclature:</strong> " + b["NOMENCLATURE"].correct + "/" + b["NOMENCLATURE"].total + " (" + b["NOMENCLATURE"].percentage + "%)</li>";
-          if (b["JOBSARAWAK"]) htmlBody += "<li><strong>JobSarawak:</strong> " + b["JOBSARAWAK"].correct + "/" + b["JOBSARAWAK"].total + " (" + b["JOBSARAWAK"].percentage + "%)</li>";
-          if (b["SANSOLS"]) htmlBody += "<li><strong>SANSOLS:</strong> " + b["SANSOLS"].correct + "/" + b["SANSOLS"].total + " (" + b["SANSOLS"].percentage + "%)</li>";
-          if (b["EXPRT"]) htmlBody += "<li><strong>EXPRT:</strong> " + b["EXPRT"].correct + "/" + b["EXPRT"].total + " (" + b["EXPRT"].percentage + "%)</li>";
-          if (b["HAVEN"]) htmlBody += "<li><strong>HAVEN:</strong> " + b["HAVEN"].correct + "/" + b["HAVEN"].total + " (" + b["HAVEN"].percentage + "%)</li>";
-          if (b["ACCOUNTS"]) htmlBody += "<li><strong>Accounts & Escalation:</strong> " + b["ACCOUNTS"].correct + "/" + b["ACCOUNTS"].total + " (" + b["ACCOUNTS"].percentage + "%)</li>";
-          htmlBody += "</ul>";
+          htmlBody += "<h3 style='color: #0f172a; margin-top: 22px; font-size: 15px;'>Module Performance Breakdown</h3>" +
+            "<table style='width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 20px;'>" +
+            "<tr style='background: #f1f5f9; text-align: left;'><th style='padding: 8px; border: 1px solid #cbd5e1;'>Module</th><th style='padding: 8px; border: 1px solid #cbd5e1;'>Score</th><th style='padding: 8px; border: 1px solid #cbd5e1;'>Status</th></tr>";
+          
+          var modKeys = ["NOMENCLATURE", "JOBSARAWAK", "SANSOLS", "EXPRT", "HAVEN", "ACCOUNTS"];
+          for (var k = 0; k < modKeys.length; k++) {
+            var mKey = modKeys[k];
+            if (b[mKey]) {
+              var mPassed = b[mKey].percentage >= 80;
+              htmlBody += "<tr>" +
+                "<td style='padding: 8px; border: 1px solid #e2e8f0;'><strong>" + mKey + "</strong></td>" +
+                "<td style='padding: 8px; border: 1px solid #e2e8f0;'>" + b[mKey].correct + " / " + b[mKey].total + " (" + b[mKey].percentage + "%)</td>" +
+                "<td style='padding: 8px; border: 1px solid #e2e8f0; color: " + (mPassed ? "#16a34a" : "#dc2626") + "; font-weight: bold;'>" + (mPassed ? "Pass" : "Review Needed") + "</td>" +
+                "</tr>";
+            }
+          }
+          htmlBody += "</table>";
         }
 
-        htmlBody += "<p style='font-size: 12px; color: #64748b; margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 12px;'>SOCOE Sdn Bhd &bull; Confidential GENESIS Training & Compliance System</p></div>";
+        // Summary of Mistakes for review
+        if (data.detailedMistakes && data.detailedMistakes.length > 0) {
+          htmlBody += "<h3 style='color: #0f172a; margin-top: 20px; font-size: 15px;'>Discrepancy Review (" + data.detailedMistakes.length + " Items)</h3>" +
+            "<div style='background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 12px; margin-bottom: 20px;'>";
+          
+          for (var j = 0; j < Math.min(data.detailedMistakes.length, 8); j++) {
+            var dm = data.detailedMistakes[j];
+            htmlBody += "<div style='margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px dashed #fcd34d; font-size: 12px;'>" +
+              "<strong>[" + dm.section + "] " + dm.questionText + "</strong><br/>" +
+              "<span style='color: #dc2626;'>&bull; Your Selection: " + dm.selectedAnswer + "</span><br/>" +
+              "<span style='color: #16a34a;'>&bull; Verified SOP Protocol: " + dm.correctAnswer + "</span><br/>" +
+              "<span style='color: #64748b; font-style: italic;'>&bull; SOP Reason: " + dm.reason + "</span>" +
+              "</div>";
+          }
+          if (data.detailedMistakes.length > 8) {
+            htmlBody += "<p style='font-size: 11px; color: #78716c; margin: 0;'>+ " + (data.detailedMistakes.length - 8) + " additional items logged in the central portal.</p>";
+          }
+          htmlBody += "</div>";
+        }
+
+        htmlBody += "<p style='font-size: 11px; color: #64748b; margin-top: 26px; border-top: 1px solid #e2e8f0; padding-top: 12px;'>SOCOE Sdn Bhd &bull; Confidential GENESIS Training & Compliance System</p></div>";
 
         MailApp.sendEmail({
           to: email,
@@ -226,8 +333,10 @@ function doPost(e) {
       }
     }
 
-    // Append row to Google Sheet
-    sheet.appendRow([
+    // ------------------------------------------
+    // Append row to Tab 1: Assessment Summary
+    // ------------------------------------------
+    summarySheet.appendRow([
       ts,
       email,
       status,
@@ -239,6 +348,7 @@ function doPost(e) {
       passed,
       timeSpent,
       mistakes,
+      weakest,
       nom,
       js,
       san,
@@ -248,8 +358,12 @@ function doPost(e) {
       emailSent
     ]);
 
-    return ContentService.createTextOutput(JSON.stringify({ result: "success", emailSent: emailSent }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({
+      result: "success",
+      emailSent: emailSent,
+      summaryLogged: true,
+      mistakesLoggedCount: itemsLogged
+    })).setMimeType(ContentService.MimeType.JSON);
 
   } catch (error) {
     return ContentService.createTextOutput(JSON.stringify({ result: "error", error: error.toString() }))

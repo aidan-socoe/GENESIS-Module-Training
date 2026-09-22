@@ -65,7 +65,27 @@ export const GoogleSheetConfigModal: React.FC<GoogleSheetConfigModalProps> = ({
           ACCOUNTS: { correct: 14, total: 15, percentage: 93.3 },
         },
         mistakesCount: 5,
-        mistakeTopics: ['SANSOLS site inspection photo rules', 'EXPRT key post advertisement exception'],
+        weakestModules: ['SANSOLS (86.7%)'],
+        detailedMistakes: [
+          {
+            questionId: 'san-8',
+            section: 'SANSOLS',
+            sectionTitle: 'SANSOLS Procedural Routing',
+            questionText: 'Under SANSOLS standard operating procedures, who must approve the AP Quota application?',
+            selectedAnswer: 'Immigration Department of Sarawak',
+            correctAnswer: 'State Secretary / JKLE recommendation panel',
+            reason: 'SANSOLS AP Quota approvals are strictly sanctioned under the authority of the State Secretary.',
+          },
+          {
+            questionId: 'exp-4',
+            section: 'EXPRT',
+            sectionTitle: 'EXPRT Expatriate Platform',
+            questionText: 'What is the required duration for a structured local understudy program for expatriate key posts?',
+            selectedAnswer: '6 Months from contract signing',
+            correctAnswer: '12 Months structured program with JTKS periodic review',
+            reason: 'Understudy programs require a structured 12-month timeline with milestone reviews by JTKS.',
+          },
+        ],
       },
       webhookUrl
     );
@@ -129,7 +149,9 @@ export const GoogleSheetConfigModal: React.FC<GoogleSheetConfigModalProps> = ({
             </p>
           )}
           <p className="text-[11px] text-slate-400 leading-relaxed">
-            Every test started or finished will transmit a comprehensive JSON packet to this URL containing: candidate email, completion status, score, percentage, elapsed time, and per-module breakdown.
+            Every test started or finished automatically logs into two dedicated Google Sheet tabs:
+            <strong className="text-cyan-300"> &ldquo;Assessment Summary&rdquo;</strong> (candidate scores, times, and priority domains) and
+            <strong className="text-purple-300"> &ldquo;Mistakes Item Analysis&rdquo;</strong> (1 row per question answered incorrectly, detailing the question, candidate choice, correct SOP, and SOP reason for Pivot Table item analysis).
           </p>
         </div>
 

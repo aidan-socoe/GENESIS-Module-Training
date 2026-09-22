@@ -86,11 +86,15 @@ export default function App() {
         mistakeMap[m.section] = (mistakeMap[m.section] || 0) + 1;
       });
 
+      const weakest: string[] = [];
       Object.keys(breakdown).forEach((sec) => {
         const item = breakdown[sec];
         const mistakesInSec = mistakeMap[sec] || 0;
         item.correct = Math.max(0, item.total - mistakesInSec);
         item.percentage = item.total > 0 ? Number(((item.correct / item.total) * 100).toFixed(1)) : 0;
+        if (item.percentage < 80.0) {
+          weakest.push(`${sec} (${item.percentage}%)`);
+        }
       });
 
       sendToGoogleSheetWebhook({
@@ -108,7 +112,16 @@ export default function App() {
         timeSpentFormatted: `${Math.floor(timeSeconds / 60)}m ${timeSeconds % 60}s`,
         sectionBreakdown: breakdown,
         mistakesCount: finalMistakes.length,
-        mistakeTopics: finalMistakes.slice(0, 5).map((m) => m.questionText.slice(0, 80)),
+        weakestModules: weakest.length > 0 ? weakest : ['None (<80%)'],
+        detailedMistakes: finalMistakes.map((m) => ({
+          questionId: m.questionId,
+          section: m.section,
+          sectionTitle: m.sectionTitle,
+          questionText: m.questionText,
+          selectedAnswer: m.selectedAnswer,
+          correctAnswer: m.correctAnswer,
+          reason: m.reason,
+        })),
       }).catch((e) => console.error('Error firing webhook finish event:', e));
     },
     [participantEmail]
