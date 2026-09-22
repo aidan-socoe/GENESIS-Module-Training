@@ -37,7 +37,7 @@ export interface MistakeRecord {
   reason: string;
 }
 
-export type QuizMode = 'FULL' | 'SPRINT_15' | 'SECTION';
+export type QuizMode = 'FULL' | 'SPRINT_30' | 'SECTION';
 
 export interface AssessmentParticipant {
   email: string;

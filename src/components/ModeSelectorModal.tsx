@@ -84,14 +84,14 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
               </div>
             </button>
 
-            {/* Quick 15 Sprint */}
+            {/* Quick 30 Sprint */}
             <button
               onClick={() => {
-                onSelectMode('SPRINT_15', 'ALL');
+                onSelectMode('SPRINT_30', 'ALL');
                 onClose();
               }}
               className={`p-4 rounded-xl border text-left transition-all relative ${
-                currentMode === 'SPRINT_15'
+                currentMode === 'SPRINT_30'
                   ? 'bg-cyan-950/40 border-cyan-400 text-white shadow-lg shadow-cyan-500/10 ring-1 ring-cyan-400'
                   : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-850'
               }`}
@@ -99,15 +99,15 @@ export const ModeSelectorModal: React.FC<ModeSelectorModalProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 font-bold text-sm text-white">
                   <Zap className="w-3.5 h-3.5 text-amber-400" />
-                  <span>15-Ticket Sprint</span>
+                  <span>30-Ticket Sprint</span>
                 </div>
-                {currentMode === 'SPRINT_15' && <Check className="w-4 h-4 text-cyan-400" />}
+                {currentMode === 'SPRINT_30' && <Check className="w-4 h-4 text-cyan-400" />}
               </div>
               <p className="text-xs text-slate-400 mt-1">
-                Rapid 5-minute refresher with 15 randomized questions from the question bank.
+                Focused 10-minute training with 30 randomized scenarios selected across all modules.
               </p>
               <div className="mt-2.5 inline-block text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-amber-950/40 text-amber-300 border border-amber-700/40">
-                15 Random Tickets
+                30 Random Tickets
               </div>
             </button>
           </div>

@@ -56,8 +56,8 @@ export default function App() {
   const startQuiz = useCallback(
     (mode: QuizMode = 'FULL', section: QuizSection = 'ALL', customPool?: QuizQuestion[]) => {
       let limit: number | undefined;
-      if (mode === 'SPRINT_15') {
-        limit = 15;
+      if (mode === 'SPRINT_30') {
+        limit = 30;
       }
 
       const prepared = customPool

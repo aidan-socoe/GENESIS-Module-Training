@@ -28,7 +28,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   totalTickets,
 }) => {
   const getModeLabel = () => {
-    if (currentMode === 'SPRINT_15') return '15-Ticket Sprint';
+    if (currentMode === 'SPRINT_30') return '30-Ticket Sprint';
     if (currentMode === 'SECTION') return SECTION_METADATA[currentSection].label;
     return 'Full Master Challenge';
   };
