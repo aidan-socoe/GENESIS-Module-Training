@@ -39,6 +39,11 @@ export interface MistakeRecord {
 
 export type QuizMode = 'FULL' | 'SPRINT_15' | 'SECTION';
 
+export interface AssessmentParticipant {
+  email: string;
+  unlockedAt: string;
+}
+
 export interface QuizSessionSummary {
   total: number;
   score: number;

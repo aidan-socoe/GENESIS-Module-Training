@@ -23,6 +23,7 @@ interface ResultScreenProps {
   timeSpentSeconds: number;
   mode: QuizMode;
   section: QuizSection;
+  participantEmail?: string;
   onRestart: () => void;
   onRetestMissed: () => void;
   onOpenModeSelector: () => void;
@@ -35,6 +36,7 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
   timeSpentSeconds,
   mode,
   section,
+  participantEmail,
   onRestart,
   onRetestMissed,
   onOpenModeSelector,
@@ -102,6 +104,12 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-heading">
               {passed ? 'SESSION PASSED' : 'SESSION FAILED'}
             </h1>
+            {participantEmail && (
+              <div className="flex items-center gap-1.5 text-xs text-cyan-300 font-mono pt-0.5">
+                <span className="text-slate-400">Candidate:</span>
+                <span className="font-semibold underline decoration-cyan-500/50">{participantEmail}</span>
+              </div>
+            )}
             <p className="text-slate-300 text-sm sm:text-base max-w-xl leading-relaxed">
               {passed
                 ? 'Excellent work! You have satisfied the criteria for the GENESIS module framework.'

@@ -1,30 +1,61 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Lock, ArrowRight, AlertCircle, KeyRound } from 'lucide-react';
+import { ShieldCheck, Lock, ArrowRight, AlertCircle, KeyRound, Mail, CheckCircle2 } from 'lucide-react';
 import { SocoeLogo } from './SocoeLogo';
 
 interface PasswordGateProps {
-  onUnlock: () => void;
+  onUnlock: (email: string) => void;
 }
 
 export const PasswordGate: React.FC<PasswordGateProps> = ({ onUnlock }) => {
+  const [emailInput, setEmailInput] = useState(() => {
+    return localStorage.getItem('socoe_genesis_last_email') || '';
+  });
   const [passwordInput, setPasswordInput] = useState('');
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
+    const cleanEmail = emailInput.trim().toLowerCase();
+    const cleanPassword = passwordInput.trim();
+
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      setError('Please enter a valid staff email address to register your assessment.');
+      return;
+    }
+
     setIsSubmitting(true);
-    setError(false);
 
     // The authorized secret passcode
     const EXPECTED = 'SOCOE_GENESIS_module1';
 
     setTimeout(() => {
-      if (passwordInput.trim() === EXPECTED) {
+      if (cleanPassword === EXPECTED) {
+        // Record participant session
         sessionStorage.setItem('socoe_genesis_auth', 'unlocked');
-        onUnlock();
+        sessionStorage.setItem('socoe_genesis_email', cleanEmail);
+        localStorage.setItem('socoe_genesis_last_email', cleanEmail);
+
+        // Append to tracked assessments log in localStorage
+        try {
+          const stored = localStorage.getItem('socoe_genesis_participants');
+          const list = stored ? JSON.parse(stored) : [];
+          list.push({
+            email: cleanEmail,
+            unlockedAt: new Date().toISOString(),
+          });
+          localStorage.setItem('socoe_genesis_participants', JSON.stringify(list));
+        } catch {
+          // Ignore local storage error if restricted
+        }
+
+        onUnlock(cleanEmail);
       } else {
-        setError(true);
+        setError('Incorrect passcode. Please verify with your module lead.');
         setIsSubmitting(false);
       }
     }, 250);
@@ -83,15 +114,45 @@ export const PasswordGate: React.FC<PasswordGateProps> = ({ onUnlock }) => {
                 SOCOE GENESIS Training
               </h2>
               <p className="text-xs text-cyan-400 font-medium tracking-wide uppercase mt-1">
-                Module 1 Challenge Access
+                Module 1 Assessment Sign-In
               </p>
               <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-                This internal training portal contains proprietary SOCOE process flows and confidential standard operating procedures. Enter the passcode to continue.
+                Provide your staff email to track your completion record, then enter the module passcode to begin.
               </p>
             </div>
 
-            {/* Password Form */}
+            {/* Sign-in Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Staff Email Field */}
+              <div>
+                <label
+                  htmlFor="staff-email-input"
+                  className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5"
+                >
+                  Staff Email Address
+                </label>
+                <div className="relative">
+                  <input
+                    id="staff-email-input"
+                    type="email"
+                    required
+                    autoFocus={!emailInput}
+                    value={emailInput}
+                    onChange={(e) => {
+                      setEmailInput(e.target.value);
+                      if (error) setError(null);
+                    }}
+                    placeholder="name@socoe.com"
+                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-950/90 text-sm text-slate-100 placeholder-slate-500 border border-slate-700/80 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 transition-all outline-none"
+                  />
+                  <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+                <span className="text-[11px] text-slate-500 mt-1 block">
+                  Used to attribute your test score & completion record
+                </span>
+              </div>
+
+              {/* Password Field */}
               <div>
                 <label
                   htmlFor="passcode-input"
@@ -103,12 +164,12 @@ export const PasswordGate: React.FC<PasswordGateProps> = ({ onUnlock }) => {
                   <input
                     id="passcode-input"
                     type="password"
-                    autoFocus
+                    autoFocus={!!emailInput}
                     required
                     value={passwordInput}
                     onChange={(e) => {
                       setPasswordInput(e.target.value);
-                      if (error) setError(false);
+                      if (error) setError(null);
                     }}
                     placeholder="Enter training passcode..."
                     className={`w-full px-4 py-3 rounded-xl bg-slate-950/90 text-sm text-slate-100 placeholder-slate-500 border transition-all outline-none font-mono ${
@@ -122,7 +183,7 @@ export const PasswordGate: React.FC<PasswordGateProps> = ({ onUnlock }) => {
                 {error && (
                   <div className="mt-2.5 flex items-center gap-1.5 text-xs text-rose-400 bg-rose-950/40 border border-rose-800/50 px-3 py-2 rounded-lg">
                     <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>Incorrect passcode. Please verify with your module lead.</span>
+                    <span>{error}</span>
                   </div>
                 )}
               </div>
@@ -130,14 +191,14 @@ export const PasswordGate: React.FC<PasswordGateProps> = ({ onUnlock }) => {
               <button
                 type="submit"
                 id="submit-passcode-btn"
-                disabled={isSubmitting || !passwordInput.trim()}
-                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold text-sm text-slate-950 bg-gradient-to-r from-cyan-400 to-teal-400 hover:from-cyan-300 hover:to-teal-300 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-cyan-950/40"
+                disabled={isSubmitting || !passwordInput.trim() || !emailInput.trim()}
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold text-sm text-slate-950 bg-gradient-to-r from-cyan-400 to-teal-400 hover:from-cyan-300 hover:to-teal-300 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-cyan-950/40 cursor-pointer"
               >
                 {isSubmitting ? (
-                  <span>Authenticating...</span>
+                  <span>Verifying Credentials...</span>
                 ) : (
                   <>
-                    <span>Unlock Training Session</span>
+                    <span>Sign In & Start Assessment</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}

@@ -6,6 +6,7 @@ import { ResultScreen } from './components/ResultScreen';
 import { ModeSelectorModal } from './components/ModeSelectorModal';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { PasswordGate } from './components/PasswordGate';
+import { ParticipantHistoryModal } from './components/ParticipantHistoryModal';
 import { SocoeLogo } from './components/SocoeLogo';
 import {
   MASTER_QUESTIONS,
@@ -22,9 +23,12 @@ import {
 import { Shield, Sparkles, BookOpen } from 'lucide-react';
 
 export default function App() {
-  // Session password protection state
+  // Session password protection state & Participant email
   const [isUnlocked, setIsUnlocked] = useState<boolean>(() => {
     return sessionStorage.getItem('socoe_genesis_auth') === 'unlocked';
+  });
+  const [participantEmail, setParticipantEmail] = useState<string>(() => {
+    return sessionStorage.getItem('socoe_genesis_email') || '';
   });
 
   const [currentMode, setCurrentMode] = useState<QuizMode>('FULL');
@@ -46,6 +50,7 @@ export default function App() {
   // Modals
   const [isModeModalOpen, setIsModeModalOpen] = useState<boolean>(false);
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState<boolean>(false);
+  const [isRosterModalOpen, setIsRosterModalOpen] = useState<boolean>(false);
 
   // Initialize Quiz helper
   const startQuiz = useCallback(
@@ -141,6 +146,11 @@ export default function App() {
     setIsUnlocked(false);
   };
 
+  const handleUnlock = (email: string) => {
+    setParticipantEmail(email);
+    setIsUnlocked(true);
+  };
+
   // Keyboard navigation handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -202,7 +212,7 @@ export default function App() {
 
   // If password gate is locked, render confidential password screen
   if (!isUnlocked) {
-    return <PasswordGate onUnlock={() => setIsUnlocked(true)} />;
+    return <PasswordGate onUnlock={handleUnlock} />;
   }
 
   return (
@@ -232,6 +242,8 @@ export default function App() {
         onResetQuiz={() => startQuiz(currentMode, currentSection)}
         onOpenKeyboardShortcuts={() => setIsShortcutsModalOpen(true)}
         onLockSession={handleLockSession}
+        onOpenRoster={() => setIsRosterModalOpen(true)}
+        activeEmail={participantEmail}
         totalTickets={questions.length}
       />
 
@@ -292,6 +304,7 @@ export default function App() {
             timeSpentSeconds={elapsedSeconds}
             mode={currentMode}
             section={currentSection}
+            participantEmail={participantEmail}
             onRestart={() => startQuiz(currentMode, currentSection)}
             onRetestMissed={handleRetestMissed}
             onOpenModeSelector={() => setIsModeModalOpen(true)}
@@ -328,6 +341,12 @@ export default function App() {
       <KeyboardShortcutsModal
         isOpen={isShortcutsModalOpen}
         onClose={() => setIsShortcutsModalOpen(false)}
+      />
+
+      <ParticipantHistoryModal
+        isOpen={isRosterModalOpen}
+        onClose={() => setIsRosterModalOpen(false)}
+        currentEmail={participantEmail}
       />
     </div>
   );
