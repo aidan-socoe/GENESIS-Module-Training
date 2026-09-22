@@ -20,6 +20,13 @@ import {
 import { MistakeRecord, QuizMode, QuizQuestion, QuizSection } from '../types';
 import { SECTION_METADATA } from '../data/questions';
 import { getStoredWebhookUrl } from '../services/webhook';
+import {
+  getLeaderboard,
+  recordLeaderboardAttempt,
+  LeaderboardEntry,
+  RecordAttemptResult,
+} from '../services/leaderboard';
+import { CompetitiveLeaderboard } from './CompetitiveLeaderboard';
 
 interface ResultScreenProps {
   score: number;
@@ -54,6 +61,27 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
   const passed = percentage >= 80.0;
   const [selectedSectionFilter, setSelectedSectionFilter] = useState<string>('ALL');
   const hasWebhook = !!getStoredWebhookUrl();
+
+  // Competitive Leaderboard tracking
+  const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>(() => getLeaderboard());
+  const [attemptRecord, setAttemptRecord] = useState<RecordAttemptResult | null>(null);
+
+  useEffect(() => {
+    // Record or update this attempt on the leaderboard whenever user finishes
+    const activeEmail = participantEmail || sessionStorage.getItem('socoe_genesis_email') || 'candidate@socoe.com';
+    const result = recordLeaderboardAttempt({
+      email: activeEmail,
+      percentage,
+      score,
+      totalQuestions: total,
+      timeSpentSeconds,
+      mode,
+      section,
+      passed,
+    });
+    setLeaderboardEntries(result.leaderboard);
+    setAttemptRecord(result);
+  }, [percentage, score, total, timeSpentSeconds, mode, section, passed, participantEmail]);
 
   // Compute detailed per-section statistics
   const sectionStats = React.useMemo(() => {
@@ -342,6 +370,18 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
           <span>Switch Module / Mode</span>
         </button>
       </div>
+
+      {/* Competitive Leaderboard (Updates on every retake based on time taken & percentage) */}
+      <CompetitiveLeaderboard
+        entries={leaderboardEntries}
+        currentCandidateEmail={participantEmail}
+        currentAttemptPercentage={percentage}
+        currentAttemptTimeSeconds={timeSpentSeconds}
+        isNewPersonalBest={attemptRecord?.isNewPersonalBest}
+        improvedTime={attemptRecord?.improvedTime}
+        improvedPercentage={attemptRecord?.improvedPercentage}
+        userRank={attemptRecord?.rank}
+      />
 
       {/* Mistakes Review Section */}
       <div className="bg-[#091122]/90 border border-slate-800/80 rounded-2xl p-6 sm:p-8">
